@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# dsh-suite — DSH 安全套件统一命令行
+# 自动定位随包分发的 Python 核心,无需 pip 安装。
+#
+# 用法:
+#   dsh-suite status                 总览(总线钩子/信任状态/哨兵/代理)
+#   dsh-suite trust                  固化当前 hooks.json 指纹
+#   dsh-suite sentinels              重新生成渠道出口哨兵
+#   dsh-suite sandbox run -- <cmd>   沙箱内执行命令(见 README 沙箱启动器)
+#   dsh-suite netproxy ...           网络白名单代理(透传参数)
+#   dsh-suite wrap-headless "<任务>" 以沙箱+代理运行一次 headless 任务
+set -e
+SUITE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="$SUITE_ROOT/python${PYTHONPATH:+:$PYTHONPATH}"
+export DSH_HOOKS_PKG_ROOT="$SUITE_ROOT/python"
+PY="${DSH_HOOKS_PYTHON:-python3}"
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  status)
+    echo "== 钩子总线 =="
+    "$PY" -m dsh_hooks.cli check || true
+    echo "== 信任状态 =="
+    "$PY" -c "
+from dsh_hooks import trust
+from dsh_hooks.config import default_config_path
+p=str(default_config_path())
+import os
+if os.path.exists(p):
+    s=trust.status_of(p); print(p, '→', s['state'])
+else: print('hooks.json 不存在')" || true
+    echo "== 出口哨兵 =="
+    ls "$(echo ${DSH_HOME:-~/.dsh})/hooks/shims" 2>/dev/null | head -n 5 || echo '(未生成)'
+    ;;
+  trust|sentinels)
+    if [ "$cmd" = "sentinels" ]; then set -- install-sentinels "$@"; else set -- trust "$@"; fi
+    exec "$PY" -m dsh_hooks.cli "$@"
+    ;;
+  sandbox)
+    sub="${1:-}"; [ "${2:-}" = "--" ] && shift
+    case "$sub" in
+      run) shift; exec "$PY" -m dsh_hooks.cli sandbox run --policy "${DSH_HOOKS_SANDBOX_POLICY:-$SUITE_ROOT/resources/hooks-sandbox.default.json}" -- "$@" ;;
+      *)   exec "$PY" -m dsh_hooks.cli sandbox "$@" ;;
+    esac ;;
+  netproxy)
+    exec "$PY" -m dsh_hooks.netproxy "$@" ;;
+  wrap-headless)
+    task="${1:?用法: dsh-suite wrap-headless \"<任务>\"}"
+    DSH_BIN="${DSH_BIN:-$SUITE_ROOT/../dsh_new/node_modules/@deepseek-ai/dsh/lib/bin.js}"
+    export DSH_PERMISSION_MODE=danger-full-access   # 外层沙箱接管,内层退出
+    exec "$PY" -m dsh_hooks.cli sandbox run \
+      --policy "${DSH_HOOKS_SANDBOX_POLICY:-$SUITE_ROOT/resources/hooks-sandbox.default.json}" \
+      -- node "$DSH_BIN" --profile headless "$task"
+    ;;
+  *)
+    grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac

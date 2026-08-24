@@ -1,0 +1,55 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "name": "秘密文件访问守卫",
+        "matcher": "Bash|Shell|Python|zsh",
+        "command": "builtin:secret_file_guard",
+        "priority": 5,
+        "timeout_s": 10
+      },
+      {
+        "name": "危险命令守卫",
+        "matcher": "Bash|Shell|Python|zsh",
+        "command": "builtin:danger_command_guard",
+        "priority": 10,
+        "timeout_s": 10
+      },
+      {
+        "name": "泄密哨兵",
+        "command": "builtin:secret_redactor",
+        "priority": 30
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "name": "提示词脱敏",
+        "command": "builtin:secret_redactor"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "name": "审计日志",
+        "command": "builtin:audit_log"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "name": "审计日志",
+        "command": "builtin:audit_log"
+      }
+    ],
+    "ReplyReady": [
+      {
+        "name": "已知秘密守卫",
+        "command": "builtin:known_secret_guard",
+        "priority": 10
+      },
+      {
+        "name": "泄密哨兵兜底",
+        "command": "builtin:secret_redactor",
+        "priority": 20
+      }
+    ]
+  }
+}

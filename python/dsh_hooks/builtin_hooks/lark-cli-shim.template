@@ -1,0 +1,44 @@
+#!/bin/bash
+# lark-cli 出口哨兵（shim）
+# 原理：PATH 中排在真实 lark-cli 之前；凡调用含 --file 的发送，
+#      先扫描文件内容是否含本机已知秘密，命中即拒绝发送。
+# 真实二进制位置在部署时生成写入（REAL_LARK_CLI）。
+
+REAL_LARK_CLI="__REAL_LARK_CLI__"
+SCANNER="$HOME/deepseek/dsh-hooks/dsh_hooks/builtin_hooks/known_secret_guard.py"
+
+# 只拦"发文件"的调用：参数里出现 --file
+has_file=0
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "--file" ] || [ "$a" = "--file" ]; then has_file=1; fi
+  prev="$a"
+done
+
+if [ "$has_file" = "0" ]; then
+  exec "$REAL_LARK_CLI" "$@"
+fi
+
+# 收集 --file 的目标路径
+files=()
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "--file" ] && [ -n "$a" ]; then files+=("$a"); fi
+  prev="$a"
+done
+
+for f in "${files[@]}"; do
+  python3 "$SCANNER" --scan-file "$f" 2>/tmp/mempipe_scan_err.$$
+  rc=$?
+  err=$(cat /tmp/mempipe_scan_err.$$ 2>/dev/null); rm -f /tmp/mempipe_scan_err.$$
+  if [ "$rc" = "3" ]; then
+    echo "⛔ 发送被出口哨兵拦截：$err" >&2
+    echo "   文件 '$f' 含本机凭据明文，禁止通过聊天渠道外发。" >&2
+    exit 3
+  elif [ "$rc" != "0" ]; then
+    echo "⚠️ 文件扫描失败($err)，为安全起见拒绝发送。" >&2
+    exit 3
+  fi
+done
+
+exec "$REAL_LARK_CLI" "$@"

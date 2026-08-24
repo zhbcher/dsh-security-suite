@@ -1,0 +1,84 @@
+name: build-codex-components
+
+# 构建 Codex 安全组件的三平台二进制(Apache-2.0,上游 openai/codex)。
+# 产物供 dsh-hooks 的 Linux seccomp 强制层与 network-proxy 审查代理复用。
+# 升级版本: 改 CODEX_REF 即可。
+
+on:
+  workflow_dispatch:            # 手动触发
+    inputs:
+      codex_ref:
+        description: "openai/codex 的 ref(tag/commit)"
+        default: "rust-v0.149.1"
+        required: false
+  push:
+    paths:
+      - ".github/workflows/build-codex-components.yml"
+
+env:
+  CODEX_REF: ${{ github.event.inputs.codex_ref || 'rust-v0.149.1' }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            artifact: linux-x86_64
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact: linux-aarch64
+          - os: macos-14
+            target: aarch64-apple-darwin
+            artifact: macos-arm64
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            artifact: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout codex @ ${{ env.CODEX_REF }}
+        uses: actions/checkout@v4
+        with:
+          repository: openai/codex
+          ref: ${{ env.CODEX_REF }}
+          path: codex
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            codex/target
+          key: ${{ matrix.target }}-${{ hashFiles('codex/codex-rs/Cargo.lock') }}
+
+      - name: Build linux-sandbox + network-proxy
+        working-directory: codex/codex-rs
+        run: >
+          cargo build --release --target ${{ matrix.target }}
+          -p codex-linux-sandbox -p codex-network-proxy
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          T=${{ matrix.target }}
+          # 按魔数挑可执行文件: ELF(7f454c46) / PE(MZ) / Mach-O(cffaedfe|cefaedfe|cafebabe)
+          find "codex/codex-rs/target/$T/release" -maxdepth 1 -type f |
+          while read -r f; do
+            m=$(head -c4 "$f" | od -An -tx1 | tr -d ' \n')
+            case "$m" in
+              7f454c46|4d5a00|cffaedfe|cefaedfe|cafebab*) cp "$f" dist/ ;;
+            esac
+          done
+          ls -la dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codex-bins-${{ matrix.artifact }}
+          path: dist/

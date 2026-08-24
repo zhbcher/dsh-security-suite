@@ -1,0 +1,7 @@
+# @zhbcher/dsh-security-suite bundle patch: 插入安全套件宿主组件行。
+# 安装: dsh plugin --profile <name> add <本包路径>
+# 注意: bundle patch 自动生效,勿再在 profile 的 cordis.patch.yml 重复 insert
+# (duplicate id 会导致加载器崩溃)。
+- insert:
+    - id: dsh-security-suite
+      name: '@zhbcher/dsh-security-suite'

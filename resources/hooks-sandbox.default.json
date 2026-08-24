@@ -1,0 +1,21 @@
+{
+  "mode": "workspace-write",
+  "writable_roots": [
+    "~/deepseek",
+    "/tmp",
+    "/var/folders",
+    { "path": "~/.dsh", "exclude": ["settings.yaml", "profiles", "*.token"] }
+  ],
+  "deny_read": [
+    "~/.proxy-token",
+    "~/.netrc",
+    "~/.aws/**",
+    "~/.gnupg/**",
+    "~/.ssh/**",
+    "~/Library/Keychains/**"
+  ],
+  "network": {
+    "mode": "full",
+    "_说明": "macOS Seatbelt 无法按域名过滤（SBPL remote ip 不支持主机名）。domain 级白名单需本地审查代理（Phase E）：届时改 mode=restricted + proxy_ports=[代理端口]，allow_remote 作为代理层过滤配置保留"
+  }
+}
