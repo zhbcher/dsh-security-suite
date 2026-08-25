@@ -25,8 +25,8 @@ import { fileURLToPath } from 'node:url'
 export const name = 'dsh-security-suite'
 export const inject = []
 
-const PKG_ROOT = fileURLToPath(new URL('..', import.meta.url))   // 包根(plugin/..)
-const PY_CORE = join(PKG_ROOT, 'python')                          # PYTHONPATH 指向处
+const PKG_ROOT = fileURLToPath(new URL('../..', import.meta.url))  // 包根(从 plugin/lib/ 上跳两级)
+const PY_CORE = join(PKG_ROOT, 'python')                          // PYTHONPATH 指向处
 
 // ── 原 bridge 的代理调用逻辑(不变) ──────────────────────────────────────────
 
